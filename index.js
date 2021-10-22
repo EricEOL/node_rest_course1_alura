@@ -1,9 +1,16 @@
-const express = require('express');
+const customExpress = require('./config/customExpress');
+const connection = require('./infra/connection');
+const Tables = require('./infra/tables');
 
-const app = express();
+connection.connect((error) => {
+  if (error) {
+    console.log(error);
+  } else {
+    console.log('MySQL running');
 
-app.get('/atendimentos', (req, res) => {
-  return res.json({"message": "Rota de atendimentos"});
+    Tables.init(connection);
+    
+    const app = customExpress();
+    app.listen(3000, () => console.log('Server running'));
+  }
 })
-
-app.listen(3000, () => console.log('Server running'));
