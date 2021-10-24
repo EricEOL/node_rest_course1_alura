@@ -56,16 +56,8 @@ class Attendance {
 
   }
 
-  list(res) {
-    const sql = `SELECT * FROM Atendimentos`;
-
-    connection.query(sql, (error, result) => {
-      if (error) {
-        res.status(400).json('Error list attendance');
-      } else {
-        res.status(200).json(result);
-      }
-    })
+  list() {
+    return attendanceRepository.list();
   }
 
   findById(id, res) {
