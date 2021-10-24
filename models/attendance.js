@@ -1,44 +1,59 @@
+const { default: axios } = require('axios');
 const moment = require('moment');
-const connection = require('../infra/connection');
+const connection = require('../infra/database/connection');
+const attendanceRepository = require('../repositories/Attendance');
 
 class Attendance {
-  add(attendance, res) {
+  constructor() {
+    this.validDate = ({ date, createdAt }) => moment(date).isSameOrAfter(createdAt);
+    this.validClient = ({ length }) => length >= 2;
 
-    const createdAt = moment().format('YYYY-MM-DD HH:MM:SS')
-    const date = moment(attendance.date, 'DD/MM/YYYY').format('YYYY-MM-DD HH:MM:SS');
+    this.validation = params => this.validations.filter(field => {
+      const { name } = field;
+      const param = params[name];
 
-    const validDate = moment(date).isSameOrAfter(createdAt);
-    const validClient = attendance.client.length >= 5;
+      return !field.valid(param)
+    })
 
-    const validations = [
+    this.validations = [
       {
         name: 'date',
-        valid: validDate,
+        valid: this.validDate,
         message: 'Data deve ser maior ou igual a data de hoje.'
       },
       {
         name: 'client',
-        valid: validClient,
+        valid: this.validClient,
         message: 'Cliente deve ter o nome maior ou igual do que 5 letras.'
       }
     ]
+  }
 
-    const errors = validations.filter(data => !data.valid);
+  add(attendance) {
+
+    const createdAt = moment().format('YYYY-MM-DD HH:MM:SS')
+    const date = moment(attendance.date, 'DD/MM/YYYY').format('YYYY-MM-DD HH:MM:SS');
+
+    const params = {
+      data: { date, createdAt },
+      client: { length: attendance.client.length }
+    }
+
+    const errors = this.validation(params);
     const errorsExist = errors.length;
 
-    if (errorsExist) return res.status(400).json(errors);
+    if (errorsExist) {
+      return new Promise((resolve, reject) => reject(errors));
+    };
 
     const attendanceWithDate = { ...attendance, createdAt, date };
 
-    const sql = `INSERT INTO Atendimentos SET ?`;
+    return attendanceRepository.add(attendanceWithDate)
+      .then(results => {
+        const id = results.insertId;
+        return { ...attendance, id }
+      });
 
-    connection.query(sql, attendanceWithDate, (error, result) => {
-      if (error) {
-        res.status(400).json('Error add attendance');
-      } else {
-        res.status(201).json('Novo atendimento incluído com sucesso');
-      }
-    })
   }
 
   list(res) {
@@ -56,11 +71,17 @@ class Attendance {
   findById(id, res) {
     const sql = `SELECT * FROM Atendimentos WHERE id=${id}`;
 
-    connection.query(sql, (error, result) => {
+    connection.query(sql, async (error, result) => {
+      const attendance = result[0];
+      const cpf = attendance.client;
+
       if (error) {
         res.status(400).json('Error list specified attendance');
       } else {
-        res.status(200).json(result[0]);
+        const { data } = await axios.get(`http://localhost:8082/${cpf}`);
+        attendance.client = data;
+
+        res.status(200).json(attendance);
       }
     })
   }
@@ -76,7 +97,7 @@ class Attendance {
       if (error) {
         res.status(400).json(error);
       } else {
-        res.status(200).json({message: `Atendimento ${id} alterado com sucesso`});
+        res.status(200).json({ message: `Atendimento ${id} alterado com sucesso` });
       }
     })
   }
@@ -85,10 +106,10 @@ class Attendance {
     const sql = `DELETE FROM Atendimentos WHERE id=?`;
 
     connection.query(sql, id, (error, result) => {
-      if(error) {
+      if (error) {
         res.status(400).json(error);
       } else {
-        res.status(200).json({message: `Atendimento ${id} excluído com sucesso`});
+        res.status(200).json({ message: `Atendimento ${id} excluído com sucesso` });
       }
     })
   }
